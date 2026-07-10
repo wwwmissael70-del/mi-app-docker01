@@ -9,7 +9,7 @@ WORKDIR /usr/src/app
 COPY package.json yarn.lock .yarnrc.yml ./
 
 # Instalar dependencias con Yarn (esto creará node_modules)
-RUN yarn install --immutable
+RUN yarn install
 
 # Copiar el resto del proyecto
 COPY . .
