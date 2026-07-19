@@ -87,7 +87,7 @@ bot.on("message", async (msg) => {
     // Llamar a Groq
     const result = await groq.chat.completions.create({
       messages: userChats[chatId],
-      model: "llama3-8b-8192",
+      model: "llama-3.1-8b-instant",
       temperature: 0.9,
       max_tokens: 1024,
     });
