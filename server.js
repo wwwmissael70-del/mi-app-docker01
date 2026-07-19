@@ -41,31 +41,33 @@ function nuevaSesion() {
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   const nombre = msg.from.first_name || "amigo";
+  
+  console.log(`[BOT] Comando /start recibido de ${nombre} (${chatId})`);
+  
   userChats[chatId] = nuevaSesion();
 
   bot.sendMessage(
     chatId,
     `¡Hola, ${nombre}! 👋\n\n` +
-    `Soy un asistente potenciado con *Gemini AI*. Escríbeme lo que quieras y haré mi mejor esfuerzo para ayudarte.\n\n` +
-    `📌 *Comandos:*\n` +
+    `Soy un asistente potenciado con Gemini AI. Escríbeme lo que quieras y haré mi mejor esfuerzo para ayudarte.\n\n` +
+    `📌 Comandos:\n` +
     `/start – Reiniciar conversación\n` +
-    `/ayuda – Ver ayuda`,
-    { parse_mode: "Markdown" }
-  );
+    `/ayuda – Ver ayuda`
+  ).catch(err => console.error("[Error Envío /start]", err.message));
 });
 
 // ── /ayuda ───────────────────────────────────────────────────────────────────
 bot.onText(/\/ayuda/, (msg) => {
+  console.log(`[BOT] Comando /ayuda recibido`);
   bot.sendMessage(
     msg.chat.id,
-    `🆘 *Ayuda*\n\n` +
+    `🆘 Ayuda\n\n` +
     `Simplemente escríbeme cualquier pregunta y te responderé con IA.\n\n` +
-    `📌 *Comandos:*\n` +
+    `📌 Comandos:\n` +
     `/start – Iniciar o reiniciar la conversación\n` +
     `/ayuda – Mostrar este mensaje\n\n` +
-    `_Tengo memoria de nuestra conversación actual. Usa /start para borrarla._`,
-    { parse_mode: "Markdown" }
-  );
+    `Tengo memoria de nuestra conversación actual. Usa /start para borrarla.`
+  ).catch(err => console.error("[Error Envío /ayuda]", err.message));
 });
 
 // ── Mensajes de texto ────────────────────────────────────────────────────────
@@ -75,8 +77,10 @@ bot.on("message", async (msg) => {
   // Solo procesar mensajes de texto que no sean comandos
   if (!msg.text || msg.text.startsWith("/")) return;
 
+  console.log(`[BOT] Mensaje recibido de ${chatId}: ${msg.text}`);
+
   // Indicador "escribiendo..."
-  bot.sendChatAction(chatId, "typing");
+  bot.sendChatAction(chatId, "typing").catch(() => {});
 
   try {
     // Crear sesión si no existe
@@ -85,7 +89,7 @@ bot.on("message", async (msg) => {
     const result   = await userChats[chatId].sendMessage(msg.text);
     const respuesta = result.response.text();
 
-    await bot.sendMessage(chatId, respuesta, { parse_mode: "Markdown" });
+    await bot.sendMessage(chatId, respuesta);
   } catch (error) {
     console.error(`[Error Gemini] chat=${chatId}:`, error.message);
 
@@ -93,8 +97,8 @@ bot.on("message", async (msg) => {
     userChats[chatId] = nuevaSesion();
     bot.sendMessage(
       chatId,
-      "😕 Ocurrió un error al procesar tu mensaje. Ya reinicié la sesión, intenta de nuevo."
-    );
+      "😕 Ocurrió un error al procesar tu mensaje con Gemini. Ya reinicié la sesión, intenta de nuevo."
+    ).catch(() => {});
   }
 });
 
