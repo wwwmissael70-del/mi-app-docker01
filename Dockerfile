@@ -1,18 +1,18 @@
-FROM node:20
+FROM node:20-alpine
 
 # Habilitar Corepack para Yarn
 RUN corepack enable && corepack prepare yarn@stable --activate
 
 WORKDIR /usr/src/app
 
-# Copiar archivos de configuración
+# Copiar solo los archivos de dependencias primero (mejor caché de capas)
 COPY package.json yarn.lock .yarnrc.yml ./
 
-# Instalar dependencias con Yarn (esto creará node_modules)
-RUN yarn install
+# Instalar dependencias en modo producción
+RUN yarn install --immutable
 
-# Copiar el resto del proyecto
-COPY . .
+# Copiar el resto del código
+COPY server.js ./
 
 EXPOSE 3000
 
