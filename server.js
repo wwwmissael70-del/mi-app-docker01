@@ -1,40 +1,35 @@
 const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Configuración ────────────────────────────────────────────────────────────
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const GEMINI_API_KEY  = process.env.GEMINI_API_KEY;
+const GROQ_API_KEY  = process.env.GROQ_API_KEY;
 
-if (!TELEGRAM_TOKEN || !GEMINI_API_KEY) {
-  console.error("❌ Faltan variables de entorno: TELEGRAM_BOT_TOKEN o GEMINI_API_KEY");
+if (!TELEGRAM_TOKEN || !GROQ_API_KEY) {
+  console.error("❌ Faltan variables de entorno: TELEGRAM_BOT_TOKEN o GROQ_API_KEY");
   process.exit(1);
 }
 
-// ── Inicializar Gemini ───────────────────────────────────────────────────────
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
-  systemInstruction:
-    "Eres un asistente útil, amigable y conciso. Responde siempre en el mismo idioma que el usuario.",
-});
+// ── Inicializar Groq ─────────────────────────────────────────────────────────
+const groq = new Groq({ apiKey: GROQ_API_KEY });
+const SYSTEM_PROMPT = "Eres un asistente útil, amigable y conciso. Responde siempre en el mismo idioma que el usuario.";
 
 // ── Inicializar Bot de Telegram (polling) ────────────────────────────────────
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
-console.log("🤖 Bot de Telegram con Gemini iniciado...");
+console.log("🤖 Bot de Telegram con Groq iniciado...");
 
 // Historial de conversación por usuario (memoria en sesión)
 const userChats = {};
 
 // Helper: crear una nueva sesión de chat para un usuario
 function nuevaSesion() {
-  return model.startChat({
-    history: [],
-    generationConfig: { maxOutputTokens: 1024, temperature: 0.9 },
-  });
+  return [
+    { role: "system", content: SYSTEM_PROMPT }
+  ];
 }
 
 // ── /start ───────────────────────────────────────────────────────────────────
@@ -49,7 +44,7 @@ bot.onText(/\/start/, (msg) => {
   bot.sendMessage(
     chatId,
     `¡Hola, ${nombre}! 👋\n\n` +
-    `Soy un asistente potenciado con Gemini AI. Escríbeme lo que quieras y haré mi mejor esfuerzo para ayudarte.\n\n` +
+    `Soy un asistente potenciado con Groq AI. Escríbeme lo que quieras y haré mi mejor esfuerzo para ayudarte.\n\n` +
     `📌 Comandos:\n` +
     `/start – Reiniciar conversación\n` +
     `/ayuda – Ver ayuda`
@@ -86,18 +81,39 @@ bot.on("message", async (msg) => {
     // Crear sesión si no existe
     if (!userChats[chatId]) userChats[chatId] = nuevaSesion();
 
-    const result   = await userChats[chatId].sendMessage(msg.text);
-    const respuesta = result.response.text();
+    // Agregar el mensaje del usuario al historial
+    userChats[chatId].push({ role: "user", content: msg.text });
+
+    // Llamar a Groq
+    const result = await groq.chat.completions.create({
+      messages: userChats[chatId],
+      model: "llama3-8b-8192",
+      temperature: 0.9,
+      max_tokens: 1024,
+    });
+
+    const respuesta = result.choices[0]?.message?.content || "No tengo respuesta para eso.";
+
+    // Guardar la respuesta del asistente en el historial
+    userChats[chatId].push({ role: "assistant", content: respuesta });
+
+    // Limitar el historial a los últimos 15 mensajes para no exceder tokens
+    if (userChats[chatId].length > 15) {
+      userChats[chatId] = [
+        userChats[chatId][0], // Mantener el system prompt
+        ...userChats[chatId].slice(-14)
+      ];
+    }
 
     await bot.sendMessage(chatId, respuesta);
   } catch (error) {
-    console.error(`[Error Gemini] chat=${chatId}:`, error.message);
+    console.error(`[Error Groq] chat=${chatId}:`, error.message);
 
     // Reiniciar sesión corrupta y avisar al usuario
     userChats[chatId] = nuevaSesion();
     bot.sendMessage(
       chatId,
-      "😕 Ocurrió un error al procesar tu mensaje con Gemini. Ya reinicié la sesión, intenta de nuevo."
+      "😕 Ocurrió un error al procesar tu mensaje con Groq. Ya reinicié la sesión, intenta de nuevo."
     ).catch(() => {});
   }
 });
@@ -109,7 +125,7 @@ bot.on("polling_error", (err) => {
 
 // ── Servidor Express — health check para Render ──────────────────────────────
 app.get("/", (_req, res) => {
-  res.json({ status: "ok", bot: "Telegram + Gemini AI ✅" });
+  res.json({ status: "ok", bot: "Telegram + Groq AI ✅" });
 });
 
 app.listen(PORT, () => {
