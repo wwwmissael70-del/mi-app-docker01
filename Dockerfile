@@ -9,7 +9,7 @@ WORKDIR /usr/src/app
 COPY package.json yarn.lock .yarnrc.yml ./
 
 # Instalar dependencias en modo producción
-RUN yarn install --immutable
+RUN yarn install
 
 # Copiar el resto del código
 COPY server.js ./
